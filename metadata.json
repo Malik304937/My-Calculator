@@ -1,0 +1,6 @@
+{
+  "name": "MY CALCULATOR",
+  "description": "A premium Apple iPhone-inspired calculator designed by Malik Shahmeer. Simple. Smart. Powerful.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
