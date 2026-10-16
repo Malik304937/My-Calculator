@@ -89,18 +89,16 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
   const handleEqualPress = () => {
     sound('equals');
     highlightKey('=');
-    setCalcState((prev) => {
-      const { nextState, newHistory } = handleEquals(prev);
-      if (newHistory) {
-        onAddHistory({
-          id: `calc_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-          expression: newHistory.expression,
-          result: newHistory.result,
-          timestamp: Date.now(),
-        });
-      }
-      return nextState;
-    });
+    const { nextState, newHistory } = handleEquals(calcState);
+    if (newHistory) {
+      onAddHistory({
+        id: `calc_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        expression: newHistory.expression,
+        result: newHistory.result,
+        timestamp: Date.now(),
+      });
+    }
+    setCalcState(nextState);
   };
 
   const handleClearPress = () => {
@@ -280,6 +278,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
           {/* ROW 1: Function Keys + Division */}
           <button
             onClick={handleClearPress}
+            aria-label={clearLabel === 'AC' ? 'All Clear' : 'Clear Entry'}
+            data-key="clear"
             className={`aspect-square rounded-full flex items-center justify-center font-medium text-xl sm:text-2xl transition-all duration-150 active:scale-95 shadow-sm ${
               pressedKey === 'C' ? 'scale-95 brightness-125' : ''
             } ${
@@ -293,6 +293,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
 
           <button
             onClick={handleSignPress}
+            aria-label="Change sign"
+            data-key="sign"
             className={`aspect-square rounded-full flex items-center justify-center font-medium text-xl sm:text-2xl transition-all duration-150 active:scale-95 shadow-sm ${
               pressedKey === 'sign' ? 'scale-95 brightness-125' : ''
             } ${
@@ -306,6 +308,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
 
           <button
             onClick={handlePercentPress}
+            aria-label="Percentage"
+            data-key="percent"
             className={`aspect-square rounded-full flex items-center justify-center font-medium text-xl sm:text-2xl transition-all duration-150 active:scale-95 shadow-sm ${
               pressedKey === '%' ? 'scale-95 brightness-125' : ''
             } ${
@@ -319,6 +323,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
 
           <button
             onClick={() => handleOperator('÷')}
+            aria-label="Divide"
+            data-key="divide"
             className={`aspect-square rounded-full flex items-center justify-center font-medium text-2xl sm:text-3xl transition-all duration-150 active:scale-95 shadow-sm ${
               calcState.operator === '÷' && calcState.waitingForOperand
                 ? 'bg-white text-[#FF9F0A] ring-2 ring-[#FF9F0A]'
@@ -333,6 +339,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
             <button
               key={digit}
               onClick={() => handleDigit(digit)}
+              aria-label={`Digit ${digit}`}
+              data-key={digit}
               className={`aspect-square rounded-full flex items-center justify-center font-normal text-2xl sm:text-3xl transition-all duration-150 active:scale-95 shadow-sm ${
                 pressedKey === digit ? 'scale-95 brightness-150' : ''
               } ${
@@ -347,6 +355,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
 
           <button
             onClick={() => handleOperator('×')}
+            aria-label="Multiply"
+            data-key="multiply"
             className={`aspect-square rounded-full flex items-center justify-center font-medium text-2xl sm:text-3xl transition-all duration-150 active:scale-95 shadow-sm ${
               calcState.operator === '×' && calcState.waitingForOperand
                 ? 'bg-white text-[#FF9F0A] ring-2 ring-[#FF9F0A]'
@@ -361,6 +371,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
             <button
               key={digit}
               onClick={() => handleDigit(digit)}
+              aria-label={`Digit ${digit}`}
+              data-key={digit}
               className={`aspect-square rounded-full flex items-center justify-center font-normal text-2xl sm:text-3xl transition-all duration-150 active:scale-95 shadow-sm ${
                 pressedKey === digit ? 'scale-95 brightness-150' : ''
               } ${
@@ -375,6 +387,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
 
           <button
             onClick={() => handleOperator('-')}
+            aria-label="Subtract"
+            data-key="subtract"
             className={`aspect-square rounded-full flex items-center justify-center font-medium text-2xl sm:text-3xl transition-all duration-150 active:scale-95 shadow-sm ${
               calcState.operator === '-' && calcState.waitingForOperand
                 ? 'bg-white text-[#FF9F0A] ring-2 ring-[#FF9F0A]'
@@ -389,6 +403,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
             <button
               key={digit}
               onClick={() => handleDigit(digit)}
+              aria-label={`Digit ${digit}`}
+              data-key={digit}
               className={`aspect-square rounded-full flex items-center justify-center font-normal text-2xl sm:text-3xl transition-all duration-150 active:scale-95 shadow-sm ${
                 pressedKey === digit ? 'scale-95 brightness-150' : ''
               } ${
@@ -403,6 +419,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
 
           <button
             onClick={() => handleOperator('+')}
+            aria-label="Add"
+            data-key="add"
             className={`aspect-square rounded-full flex items-center justify-center font-medium text-2xl sm:text-3xl transition-all duration-150 active:scale-95 shadow-sm ${
               calcState.operator === '+' && calcState.waitingForOperand
                 ? 'bg-white text-[#FF9F0A] ring-2 ring-[#FF9F0A]'
@@ -415,6 +433,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
           {/* ROW 5: 0 (Double Width Pill), Decimal, Equals */}
           <button
             onClick={() => handleDigit('0')}
+            aria-label="Digit 0"
+            data-key="0"
             className={`col-span-2 rounded-full px-7 flex items-center justify-start font-normal text-2xl sm:text-3xl transition-all duration-150 active:scale-95 shadow-sm ${
               pressedKey === '0' ? 'scale-95 brightness-150' : ''
             } ${
@@ -428,6 +448,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
 
           <button
             onClick={handleDecimal}
+            aria-label="Decimal point"
+            data-key="decimal"
             className={`aspect-square rounded-full flex items-center justify-center font-normal text-2xl sm:text-3xl transition-all duration-150 active:scale-95 shadow-sm ${
               pressedKey === '.' ? 'scale-95 brightness-150' : ''
             } ${
@@ -441,6 +463,8 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
 
           <button
             onClick={handleEqualPress}
+            aria-label="Calculate equals"
+            data-key="equals"
             className="aspect-square rounded-full flex items-center justify-center font-medium text-2xl sm:text-3xl bg-[#FF9F0A] text-white hover:bg-[#FFB033] active:bg-[#E08C07] transition-all duration-150 active:scale-95 shadow-sm"
           >
             =

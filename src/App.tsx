@@ -77,6 +77,10 @@ export default function App() {
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [externalLoadValue, setExternalLoadValue] = useState<string | null>(null);
 
+  const handleClearExternalLoad = React.useCallback(() => {
+    setExternalLoadValue(null);
+  }, []);
+
   // Sync theme
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -196,7 +200,7 @@ export default function App() {
             <CalculatorScreen
               onAddHistory={handleAddHistory}
               externalLoadValue={externalLoadValue}
-              onClearExternalLoad={() => setExternalLoadValue(null)}
+              onClearExternalLoad={handleClearExternalLoad}
               soundEnabled={soundEnabled}
               theme={theme}
             />

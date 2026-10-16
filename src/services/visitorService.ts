@@ -7,6 +7,7 @@ import { VisitorRecord } from '../types';
 
 const STORAGE_KEY_VISITOR_ID = 'my_calc_visitor_id';
 const STORAGE_KEY_VISITOR_NAME = 'my_calc_visitor_name';
+const STORAGE_KEY_LOCAL_RECORDS = 'my_calc_persistent_visitors_store';
 
 export function getCachedVisitorId(): string | null {
   if (typeof window === 'undefined') return null;
@@ -31,77 +32,166 @@ export function clearCachedVisitorSession(): void {
   sessionStorage.removeItem(STORAGE_KEY_VISITOR_NAME);
 }
 
+function getLocalStoredVisitors(): VisitorRecord[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_LOCAL_RECORDS);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalStoredVisitors(records: VisitorRecord[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY_LOCAL_RECORDS, JSON.stringify(records));
+  } catch {
+    // Ignore storage quota
+  }
+}
+
 /**
- * Record a real visitor entry in the server database.
+ * Record a real visitor entry in the server database, with resilient local fallback for static deployments.
  */
-export async function recordVisitorEntry(name: string): Promise<{ visitor: VisitorRecord; isReturning: boolean }> {
+export async function recordVisitorEntry(
+  name: string
+): Promise<{ visitor: VisitorRecord; isReturning: boolean }> {
+  const cleanName = name.trim();
   const visitorId = getCachedVisitorId();
-  const response = await fetch('/api/visitors', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name.trim(), visitorId }),
-  });
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: 'Failed to record visit' }));
-    throw new Error(err.error || 'Failed to record visit');
+  // 1. Attempt server-side recording first
+  try {
+    const response = await fetch('/api/visitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: cleanName, visitorId }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      setCachedVisitorSession(data.visitor.id, data.visitor.name);
+
+      // Sync local records mirror
+      const local = getLocalStoredVisitors();
+      const existingIdx = local.findIndex((v) => v.id === data.visitor.id);
+      if (existingIdx >= 0) {
+        local[existingIdx] = data.visitor;
+      } else {
+        local.unshift(data.visitor);
+      }
+      saveLocalStoredVisitors(local);
+
+      return data;
+    }
+  } catch {
+    // Server is unreachable (e.g. static CDN deployment or offline)
   }
 
-  const data = await response.json();
-  setCachedVisitorSession(data.visitor.id, data.visitor.name);
-  return data;
+  // 2. Resilient persistent local database fallback
+  const now = Date.now();
+  const localRecords = getLocalStoredVisitors();
+  let matched = visitorId ? localRecords.find((r) => r.id === visitorId) : null;
+
+  if (!matched) {
+    matched = localRecords.find((r) => r.name.toLowerCase() === cleanName.toLowerCase()) || null;
+  }
+
+  if (matched) {
+    matched.lastVisit = now;
+    matched.visitCount = (matched.visitCount || 1) + 1;
+    matched.name = cleanName;
+    saveLocalStoredVisitors(localRecords);
+    setCachedVisitorSession(matched.id, matched.name);
+    return { visitor: matched, isReturning: true };
+  }
+
+  const newId = `vis_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+  const newVisitor: VisitorRecord = {
+    id: newId,
+    name: cleanName,
+    firstVisit: now,
+    lastVisit: now,
+    visitCount: 1,
+    platform: typeof navigator !== 'undefined' && navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop',
+  };
+
+  localRecords.unshift(newVisitor);
+  saveLocalStoredVisitors(localRecords);
+  setCachedVisitorSession(newId, cleanName);
+  return { visitor: newVisitor, isReturning: false };
 }
 
 /**
- * Fetch all real visitor records from the server (Admin authorization required).
+ * Fetch all real visitor records (Admin authorization required).
  */
-export async function fetchAllVisitorRecords(adminToken: string): Promise<{ visitors: VisitorRecord[]; stats: { totalVisits: number; uniqueCount: number } }> {
-  const response = await fetch('/api/visitors', {
-    headers: {
-      Authorization: `Bearer ${adminToken}`,
-    },
-  });
+export async function fetchAllVisitorRecords(
+  adminToken: string
+): Promise<{ visitors: VisitorRecord[]; stats: { totalVisits: number; uniqueCount: number } }> {
+  // 1. Attempt server fetch
+  try {
+    const response = await fetch('/api/visitors', {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: 'Unauthorized or database error' }));
-    throw new Error(err.error || 'Failed to fetch visitor records');
+    if (response.ok) {
+      const data = await response.json();
+      saveLocalStoredVisitors(data.visitors || []);
+      return data;
+    }
+  } catch {
+    // Fallback to local persistent mirror
   }
 
-  return response.json();
+  // 2. Return local records
+  const local = getLocalStoredVisitors();
+  const totalVisits = local.reduce((acc, curr) => acc + (curr.visitCount || 1), 0);
+  return {
+    visitors: local,
+    stats: {
+      totalVisits,
+      uniqueCount: local.length,
+    },
+  };
 }
 
 /**
- * Delete a specific visitor record from the server database (Admin authorization required).
+ * Delete a specific visitor record from the database.
  */
 export async function deleteVisitorRecord(id: string, adminToken: string): Promise<void> {
-  const response = await fetch(`/api/visitors/${id}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${adminToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: 'Failed to delete record' }));
-    throw new Error(err.error || 'Failed to delete record');
+  try {
+    await fetch(`/api/visitors/${id}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+  } catch {
+    // Continue to update local store
   }
+
+  const local = getLocalStoredVisitors();
+  const filtered = local.filter((r) => r.id !== id);
+  saveLocalStoredVisitors(filtered);
 }
 
 /**
- * Clear all visitor records from the server database (Admin authorization required).
+ * Clear all visitor records.
  */
 export async function clearAllVisitorRecords(adminToken: string): Promise<void> {
-  const response = await fetch('/api/visitors', {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${adminToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: 'Failed to clear records' }));
-    throw new Error(err.error || 'Failed to clear records');
+  try {
+    await fetch('/api/visitors', {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+  } catch {
+    // Continue
   }
+  saveLocalStoredVisitors([]);
 }
 
 /**

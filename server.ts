@@ -324,6 +324,10 @@ app.get('/api/avatar', (_req: Request, res: Response) => {
 // Vite Integration in Development / Static Files in Production
 // -------------------------------------------------------------
 async function startServer() {
+  if (process.env.VERCEL || process.env.NOW_REGION) {
+    return;
+  }
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -346,3 +350,5 @@ async function startServer() {
 startServer().catch((err) => {
   console.error('Failed to start server:', err);
 });
+
+export default app;
